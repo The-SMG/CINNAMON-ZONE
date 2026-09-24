@@ -1,1 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Amatidia // Plasma Terminal</title>
+  <style>
+    :root {
+      --bg: #08080c;
+      --card-bg: rgba(14, 14, 24, 0.85);
+      --card-border: rgba(0, 243, 255, 0.25);
+      --cyan: #00f3ff;
+      --amber: #ffaa00;
+      --text: #e0e6ed;
+      --text-dim: #707e94;
+      --font-mono: 'Courier New', Courier, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    #plasma-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.35;
+    }
+
+    .shell {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 16px;
+    }
+
+    .badge {
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+      color: var(--cyan);
+      text-shadow: 0 0 8px rgba(0, 243, 255, 0.6);
+      background: rgba(0, 243, 255, 0.08);
+      border: 1px solid var(--cyan);
+      padding: 6px 12px;
+      border-radius: 4px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    button#sync-btn {
+      background: transparent;
+      color: var(--amber);
+      border: 1px solid var(--amber);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      padding: 8px 18px;
+      border-radius: 4px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 10px rgba(255, 170, 0, 0.2);
+    }
+
+    button#sync-btn:hover {
+      background: var(--amber);
+      color: var(--bg);
+      box-shadow: 0 0 16px rgba(255, 170, 0, 0.6);
+    }
+
+    /* Grid Layout: 7 Cards */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 16px;
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.3s ease;
+    }
+
+    .card:hover {
+      border-color: var(--cyan);
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    .card-title {
+      font-size: 0.95rem;
+      color: var(--cyan);
+      font-weight: bold;
+      letter-spacing: 0.05em;
+    }
+
+    .card-status {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 6px var(--cyan);
+    }
+
+    .card-status.amber {
+      background: var(--amber);
+      box-shadow: 0 0 6px var(--amber);
+    }
+
+    .metric-value {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    .bar-track {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: var(--cyan);
+      width: 50%;
+      transition: width 0.6s ease;
+    }
+
+    .card.amber-mode .bar-fill {
+      background: var(--amber);
+    }
+
+    /* Terminal Console */
+    .terminal {
+      background: rgba(4, 4, 8, 0.92);
+      border: 1px solid rgba(255, 170, 0, 0.3);
+      border-radius: 6px;
+      padding: 14px;
+      font-size: 0.8rem;
+      min-height: 130px;
+      max-height: 180px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 4px;
+    }
+
+    .log-entry {
+      line-height: 1.4;
+      color: var(--text-dim);
+    }
+
+    .log-entry .ts {
+      color: var(--amber);
+    }
+
+    .log-entry .cyan {
+      color: var(--cyan);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="plasma-canvas"></canvas>
+
+  <main class="shell">
+    <header>
+      <div class="badge">[ AGENT AMATIDIA // LVL 65 // 87B // POSTGRESQL LINKED ]</div>
+      <div class="controls">
+        <button id="sync-btn">Sync Telemetry</button>
+      </div>
+    </header>
+
+    <section class="grid" id="unit-grid"></section>
+
+    <section class="terminal" id="terminal-feed">
+      <div class="log-entry"><span class="ts">[INIT]</span> Terminal mounted. Ready for /api/v1/telemetry ingestion.</div>
+    </section>
+  </main>
+
+  <script>
+    const UNITS = [
+      "Core Alpha",
+      "Echelon Vector",
+      "Logic Gateway",
+      "Harmonic State",
+      "Dialect Matrix",
+      "Pulse Sentinel",
+      "Apex Crucible"
+    ];
+
+    const state = {};
+    const gridEl = document.getElementById("unit-grid");
+    const terminalEl = document.getElementById("terminal-feed");
+
+    function initGrid() {
+      gridEl.innerHTML = "";
+      UNITS.forEach((name, idx) => {
+        state[name] = {
+          score: (Math.random() * 0.4 + 0.55).toFixed(3),
+          active: true
+        };
+
+        const card = document.createElement("div");
+        card.className = "card";
+        card.id = `unit-${idx}`;
+        card.innerHTML = `
+          <div class="card-head">
+            <span>UNIT 0${idx + 1}</span>
+            <span class="card-status" id="status-${idx}"></span>
+          </div>
+          <div class="card-title">${name}</div>
+          <div class="metric-value" id="val-${idx}">${state[name].score}</div>
+          <div class="bar-track">
+            <div class="bar-fill" id="bar-${idx}" style="width: ${state[name].score * 100}%"></div>
+          </div>
+        `;
+        gridEl.appendChild(card);
+      });
+    }
+
+    function log(msg) {
+      const now = new Date().toISOString().substring(11, 19);
+      const entry = document.createElement("div");
+      entry.className = "log-entry";
+      entry.innerHTML = `<span class="ts">[${now}]</span> ${msg}`;
+      terminalEl.prepend(entry);
+    }
+
+    function syncTelemetry() {
+      log(`<span class="cyan">POST /api/v1/telemetry</span> :: Handshake validated.`);
+      UNITS.forEach((name, idx) => {
+        const delta = (Math.random() * 0.16 - 0.08);
+        let next = Math.min(0.999, Math.max(0.120, parseFloat(state[name].score) + delta));
+        state[name].score = next.toFixed(3);
+
+        const valEl = document.getElementById(`val-${idx}`);
+        const barEl = document.getElementById(`bar-${idx}`);
+        const statusEl = document.getElementById(`status-${idx}`);
+        const cardEl = document.getElementById(`unit-${idx}`);
+
+        valEl.textContent = state[name].score;
+        barEl.style.width = `${next * 100}%`;
+
+        if (next < 0.4) {
+          cardEl.classList.add("amber-mode");
+          statusEl.classList.add("amber");
+        } else {
+          cardEl.classList.remove("amber-mode");
+          statusEl.classList.remove("amber");
+        }
+      });
+      log(`State synchronized across 7 sentiment units. Dialect buffers refreshed.`);
+    }
+
+    document.getElementById("sync-btn").addEventListener("click", syncTelemetry);
+
+    // Live continuous drift
+    setInterval(() => {
+      const targetIdx = Math.floor(Math.random() * UNITS.length);
+      const name = UNITS[targetIdx];
+      const delta = (Math.random() * 0.04 - 0.02);
+      let next = Math.min(0.999, Math.max(0.120, parseFloat(state[name].score) + delta));
+      state[name].score = next.toFixed(3);
+
+      document.getElementById(`val-${targetIdx}`).textContent = state[name].score;
+      document.getElementById(`bar-${targetIdx}`).style.width = `${next * 100}%`;
+    }, 1800);
+
+    // Canvas Background: Lightweight Plasma Wave
+    const canvas = document.getElementById("plasma-canvas");
+    const ctx = canvas.getContext("2d");
+    let w, h, t = 0;
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function renderPlasma() {
+      t += 0.015;
+      ctx.clearRect(0, 0, w, h);
+
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = i === 1 ? "rgba(255, 170, 0, 0.45)" : "rgba(0, 243, 255, 0.4)";
+
+        for (let x = 0; x < w; x += 12) {
+          const y = h * 0.5 +
+            Math.sin(x * 0.004 + t + i) * 70 +
+            Math.cos(x * 0.002 - t * 0.6) * 40;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      requestAnimationFrame(renderPlasma);
+    }
+
+    initGrid();
+    renderPlasma();
+  </script>
+</body>
+</html>
 
